@@ -14,3 +14,4 @@ const checkConnectionDB = async () => {
 };
 
 export default checkConnectionDB;
+
