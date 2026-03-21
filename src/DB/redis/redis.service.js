@@ -1,12 +1,38 @@
+import { log } from "console";
 import { redisClient } from "./redis.db.js";
 
-export const revokedKey = ({userId, jti}) => {
+export const revokedKey = ({ userId, jti }) => {
   return `revokedToken:${userId}::${jti}`;
-}
+};
 
-export const getKey = ({userId}) => {
+export const getKey = ({ userId }) => {
   return `revokedToken:${userId}`;
-}
+};
+
+export const OTP_Key = ({ email }) => {
+  return `otp::${email}`;
+};
+
+export const max_OTP_Key = ({ email }) => {
+  return `max_otp::${email}`;
+};
+
+export const block_OTP_Key = ({ email }) => {
+  return `block_otp::${email}`;
+};
+
+export const reset_Password_OTP_Key = ({ email }) => {
+  return `reset_password_otp::${email}`;
+};
+
+export const two_Step_Enable_OTP_Key = ({ email }) => {
+  return `two_step_enable_otp::${email}`;
+};
+
+export const two_Step_Login_OTP_Key = ({ email }) => {
+  return `two_step_login_otp::${email}`;
+};
+
 
 export const setMethod = async ({ key, value, ttl } = {}) => {
   try {
@@ -91,5 +117,13 @@ export const disconnect = async () => {
     console.log("Disconnected from Redis successfully");
   } catch (error) {
     console.error("Error disconnecting from Redis:", error);
+  }
+};
+
+export const incrMethod = async (key) => {
+  try {
+    return await redisClient.incr(key);
+  } catch (error) {
+    log("Error incrementing value in Redis:", error);
   }
 };

@@ -14,3 +14,7 @@ export const TOKEN_SECRET_KEY = process.env.TOKEN_SECRET_KEY;
 export const REFRESH_TOKEN_SECRET_KEY = process.env.REFRESH_TOKEN_SECRET_KEY;
 
 export const REDIS_URL = process.env.REDIS_URL;
+
+export const EMAIL = process.env.EMAIL;
+
+export const PASSWORD = process.env.PASSWORD;

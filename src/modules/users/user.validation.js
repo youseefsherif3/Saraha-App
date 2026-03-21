@@ -2,6 +2,7 @@ import Joi from "joi";
 import { genderEnum } from "../../common/enum/user.enum.js";
 import { generalRules } from "../../common/utils/generalRules.js";
 
+// Sign Up Schema
 export const signUpSchema = {
   body: Joi.object({
     userName: Joi.string().min(5).max(20).required(),
@@ -34,6 +35,7 @@ export const signUpSchema = {
   // }).required(),
 };
 
+// Sign In Schema
 export const signInSchema = {
   body: Joi.object({
     email: Joi.string().lowercase().email().required(),
@@ -47,12 +49,14 @@ export const signInSchema = {
   //   }).required(),
 };
 
+// Share Profile Schema
 export const shareProfileSchema = {
   params: Joi.object({
     userId: generalRules.userId.required(),
   }).required(),
 };
 
+// Update Profile Schema
 export const updateProfileSchema = {
   body: Joi.object({
     firstName: Joi.string().min(2).max(20),
@@ -62,6 +66,7 @@ export const updateProfileSchema = {
   }).required(),
 };
 
+// Update Password Schema
 export const updatePasswordSchema = {
   body: Joi.object({
     currentPassword: generalRules.password.required(),
@@ -70,6 +75,67 @@ export const updatePasswordSchema = {
   }).required(),
 };
 
+// Upload Profile Picture Schema
 export const uploadProfilePictureSchema = {
   file: generalRules.file.required(),
+};
+
+// Confirm Email Schema
+export const confirmEmailSchema = {
+  body: Joi.object({
+    email: generalRules.email.required(),
+    otp: Joi.string()
+      .regex(/^[0-9]{6}$/)
+      .required()
+      .messages({
+        "string.pattern.base": "OTP must be a 6-digit number",
+      }),
+  }).required(),
+};
+
+// Forget Password Schema
+export const forgetPasswordSchema = {
+  body: Joi.object({
+    email: generalRules.email.required(),
+  }).required(),
+};
+
+// Reset Password Schema
+export const resetPasswordSchema = {
+  body: Joi.object({
+    email: generalRules.email.required(),
+    otp: Joi.string()
+      .regex(/^[0-9]{6}$/)
+      .required()
+      .messages({
+        "string.pattern.base": "OTP must be a 6-digit number",
+      }),
+    newPassword: generalRules.password.required(),
+    confirmNewPassword: Joi.string().valid(Joi.ref("newPassword")).required(),
+  }).required(),
+};
+
+// Enable Two-Step Verification Schema
+export const verifyTwoStepSchema = {
+  body: Joi.object({
+    otp: Joi.string()
+      .regex(/^[0-9]{6}$/)
+      .required()
+      .messages({
+        "string.pattern.base": "OTP must be a 6-digit number",
+      }),
+  }).required(),
+};
+
+// Confirm Login Two-Step Verification Schema
+export const confirmLoginTwoStepSchema = {
+  body: Joi.object({
+    email: generalRules.email.required(),
+    otp: Joi.string()
+      .regex(/^[0-9]{6}$/)
+      .required()
+      .messages({
+        "string.pattern.base": "OTP must be a 6-digit number",
+      }),
+  }).required(),
 };
