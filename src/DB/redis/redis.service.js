@@ -33,7 +33,6 @@ export const two_Step_Login_OTP_Key = ({ email }) => {
   return `two_step_login_otp::${email}`;
 };
 
-
 export const setMethod = async ({ key, value, ttl } = {}) => {
   try {
     const data = typeof value === "string" ? value : JSON.stringify(value);

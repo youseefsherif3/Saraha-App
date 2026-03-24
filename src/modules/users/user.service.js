@@ -33,7 +33,6 @@ import {
   reset_Password_OTP_Key,
   two_Step_Enable_OTP_Key,
   two_Step_Login_OTP_Key,
-  two_Step_Login_Pending_Key,
   revokedKey,
   setMethod,
 } from "../../DB/redis/redis.service.js";
