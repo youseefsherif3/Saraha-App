@@ -1,5 +1,4 @@
 import dotenv from "dotenv";
-import e from "express";
 import { resolve } from "path";
 dotenv.config({ path: resolve("config/.env") });
 
@@ -18,3 +17,5 @@ export const REDIS_URL = process.env.REDIS_URL;
 export const EMAIL = process.env.EMAIL;
 
 export const PASSWORD = process.env.PASSWORD;
+
+export const WHITELIST = process.env.WHITELIST.split(",") || [];

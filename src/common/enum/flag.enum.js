@@ -1,5 +1,4 @@
-
 export const flagEnum = {
-    allDevices : "allDevices",
-    currentDevice : "currentDevice",
+    allDevices: "allDevices",
+    currentDevice: "currentDevice",
 };

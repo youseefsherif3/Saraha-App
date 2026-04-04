@@ -9,7 +9,6 @@ import {
 } from "../../common/utils/token.service.js";
 import * as DB_Services from "../../DB/DB.service.js";
 import userModel from "../../DB/models/user.model.js";
-import { v4 as uuidv4 } from "uuid";
 import { OAuth2Client } from "google-auth-library";
 import { randomUUID } from "crypto";
 import {
@@ -33,12 +32,99 @@ import {
   reset_Password_OTP_Key,
   two_Step_Enable_OTP_Key,
   two_Step_Login_OTP_Key,
+  two_Step_Login_Pending_Key,
   revokedKey,
   setMethod,
 } from "../../DB/redis/redis.service.js";
 import { generateOTP, sendEmail } from "../../common/utils/email/send.email.js";
+import { Eventemitter } from "../../common/utils/email/email.events.js";
+import { emailTemplate } from "../../common/utils/email/email.template.js";
 
-// Sign Up API
+const createAuthTokens = (userId, email) => {
+  const jwtid = randomUUID();
+
+  return {
+    token: generateToken({
+      payload: { userId, email },
+      secret_key: TOKEN_SECRET_KEY,
+      options: {
+        expiresIn: "1h",
+        jwtid,
+      },
+    }),
+    refreshToken: generateToken({
+      payload: { userId, email },
+      secret_key: REFRESH_TOKEN_SECRET_KEY,
+      options: {
+        expiresIn: "1y",
+        jwtid,
+      },
+    }),
+  };
+};
+
+const sendEmailOtp = async ({ email, userName, initializeCounter = false }) => {
+  const isBlocked = await checkTTLMethod(block_OTP_Key({ email }));
+
+  if (isBlocked > 0) {
+    throw new Error(
+      `you have reached the maximum number of OTP requests and are blocked, please try again after ${isBlocked} seconds`,
+      { cause: 400 },
+    );
+  }
+
+  const ttl = await checkTTLMethod(OTP_Key({ email }));
+
+  if (ttl > 0) {
+    throw new Error(
+      `OTP already sent, please wait ${ttl} seconds before requesting a new one`,
+      { cause: 400 },
+    );
+  }
+
+  const max_otp = await getMethod(max_OTP_Key({ email }));
+
+  if (max_otp >= 3) {
+    await setMethod({
+      key: block_OTP_Key({ email }),
+      value: 1,
+      ttl: 60 * 30,
+    });
+
+    throw new Error(
+      "you have reached the maximum number of OTP requests, please try again later",
+      { cause: 400 },
+    );
+  }
+
+  const OTP = await generateOTP();
+
+  Eventemitter.emit("confirmEmail", async () => {
+    await sendEmail({
+      to: email,
+      subject: "Welcome to Saraha App",
+      html: emailTemplate(OTP, userName),
+    });
+
+    await setMethod({
+      key: OTP_Key({ email }),
+      value: hashing({ plaintext: `${OTP}` }),
+      ttl: 60 * 2,
+    });
+
+    if (initializeCounter) {
+      await setMethod({
+        key: max_OTP_Key({ email }),
+        value: 1,
+        ttl: 60,
+      });
+      return;
+    }
+
+    await incrMethod(max_OTP_Key({ email }));
+  });
+};
+
 export const signUp = async (req, res, next) => {
   const { userName, email, password, confirmPassword, age, gender } = req.body;
 
@@ -64,12 +150,6 @@ export const signUp = async (req, res, next) => {
     req.file.path,
   );
 
-  // let arr_paths = [];
-
-  // for (const file of req.files.coverPicture) {
-  //   arr_paths.push(file.path);
-  // }
-
   const user = await DB_Services.createService({
     model: userModel,
     data: {
@@ -79,29 +159,10 @@ export const signUp = async (req, res, next) => {
       age,
       gender,
       profilePicture: { secure_url, public_id },
-      // coverPicture: arr_paths,
     },
   });
 
-  const OTP = await generateOTP();
-
-  await sendEmail({
-    to: email,
-    subject: "Welcome to Saraha App",
-    html: `<h1>Welcome to Saraha App</h1><p>Dear ${userName} Your OTP Is : ${OTP} ,</p><p>Thank you for signing up for Saraha App! We're excited to have you on board.</p><p>Best regards,<br>Saraha App Team</p>`,
-  });
-
-  await setMethod({
-    key: OTP_Key({ email }),
-    value: hashing({ plaintext: `${OTP}` }),
-    ttl: 60 * 2,
-  });
-
-  await setMethod({
-    key: max_OTP_Key({ email }),
-    value: 1,
-    ttl: 60,
-  });
+  await sendEmailOtp({ email, userName: user.userName, initializeCounter: true });
 
   res.status(201).json({
     message: "user created successfully",
@@ -109,7 +170,6 @@ export const signUp = async (req, res, next) => {
   });
 };
 
-// Sign Up with Gmail API
 export const signUpWithGmail = async (req, res, next) => {
   const { idToken } = req.body;
 
@@ -143,7 +203,7 @@ export const signUpWithGmail = async (req, res, next) => {
     });
   }
 
-  if (user.provider == providerEnum.system) {
+  if (user.provider === providerEnum.system) {
     throw new Error(
       "email already exists with another provider, please sign in with your email and password or use another email",
       { cause: 409 },
@@ -164,7 +224,6 @@ export const signUpWithGmail = async (req, res, next) => {
   });
 };
 
-// Sign In API
 export const signIn = async (req, res, next) => {
   const { email, password } = req.body;
 
@@ -235,25 +294,7 @@ export const signIn = async (req, res, next) => {
     });
   }
 
-  const jwtid = randomUUID();
-
-  const token = generateToken({
-    payload: { userId: user._id, email: user.email },
-    secret_key: TOKEN_SECRET_KEY,
-    options: {
-      expiresIn: "1h",
-      jwtid,
-    },
-  });
-
-  const refreshToken = generateToken({
-    payload: { userId: user._id, email: user.email },
-    secret_key: REFRESH_TOKEN_SECRET_KEY,
-    options: {
-      expiresIn: "1y",
-      jwtid,
-    },
-  });
+  const { token, refreshToken } = createAuthTokens(user._id, user.email);
 
   res.status(200).json({
     message: "user signed in successfully",
@@ -262,7 +303,6 @@ export const signIn = async (req, res, next) => {
   });
 };
 
-// Confirm Login with Two-Step Verification API
 export const confirmSignInTwoStep = async (req, res, next) => {
   const { email, otp } = req.body;
 
@@ -296,25 +336,7 @@ export const confirmSignInTwoStep = async (req, res, next) => {
     throw new Error("user not found", { cause: 404 });
   }
 
-  const jwtid = randomUUID();
-
-  const token = generateToken({
-    payload: { userId: user._id, email: user.email },
-    secret_key: TOKEN_SECRET_KEY,
-    options: {
-      expiresIn: "1h",
-      jwtid,
-    },
-  });
-
-  const refreshToken = generateToken({
-    payload: { userId: user._id, email: user.email },
-    secret_key: REFRESH_TOKEN_SECRET_KEY,
-    options: {
-      expiresIn: "1y",
-      jwtid,
-    },
-  });
+  const { token, refreshToken } = createAuthTokens(user._id, user.email);
 
   await deleteMethod(twoStepOtpKey);
   await deleteMethod(pendingKey);
@@ -326,7 +348,6 @@ export const confirmSignInTwoStep = async (req, res, next) => {
   });
 };
 
-// Get Profile API
 export const getProfile = async (req, res, next) => {
   const key = `profile::${req.user._id}`;
 
@@ -351,7 +372,6 @@ export const getProfile = async (req, res, next) => {
   });
 };
 
-// Refresh Token API
 export const refreshToken = async (req, res, next) => {
   const { authorization } = req.headers;
 
@@ -388,7 +408,7 @@ export const refreshToken = async (req, res, next) => {
     secret_key: TOKEN_SECRET_KEY,
     options: {
       expiresIn: "1h",
-      jwtid: uuidv4(),
+      jwtid: randomUUID(),
     },
   });
 
@@ -399,7 +419,6 @@ export const refreshToken = async (req, res, next) => {
   });
 };
 
-// Share Profile API
 export const shareProfile = async (req, res, next) => {
   const { userId } = req.params;
 
@@ -417,10 +436,8 @@ export const shareProfile = async (req, res, next) => {
     message: "user profile retrieved successfully",
     user,
   });
-  7;
 };
 
-// Update Profile API
 export const updateProfile = async (req, res, next) => {
   const { firstName, lastName, gender, age } = req.body;
 
@@ -442,7 +459,6 @@ export const updateProfile = async (req, res, next) => {
   });
 };
 
-// Update Password API
 export const updatePassword = async (req, res, next) => {
   let { currentPassword, newPassword } = req.body;
 
@@ -466,7 +482,6 @@ export const updatePassword = async (req, res, next) => {
   });
 };
 
-// Upload Profile Picture API
 export const uploadProfilePicture = async (req, res, next) => {
   const { secure_url, public_id } = await cloudinary.uploader.upload(
     req.file.path,
@@ -483,7 +498,6 @@ export const uploadProfilePicture = async (req, res, next) => {
   });
 };
 
-// Remove Profile Picture API
 export const removeProfilePicture = async (req, res, next) => {
   if (!req.user.profilePicture?.public_id) {
     throw new Error("profile picture not found", { cause: 404 });
@@ -502,36 +516,21 @@ export const removeProfilePicture = async (req, res, next) => {
   });
 };
 
-// Log Out API
 export const logOut = async (req, res, next) => {
   const { flag } = req.query;
 
-  if (flag == flagEnum.allDevices) {
+  if (flag === flagEnum.allDevices) {
     req.user.changeCredential = new Date();
 
     await req.user.save();
 
     await deleteMethod(await keys(getKey({ userId: req.user._id })));
-
-    // await DB_Services.deleteManyService({
-    //   model: revokeTokenModel,
-    //   filter: { userId: req.user._id },
-    // });
   } else {
     await setMethod({
       key: revokedKey({ userId: req.user._id, jti: req.decoded.jti }),
       value: `${req.decoded.jti}`,
       ttl: req.decoded.exp - Math.floor(Date.now() / 1000),
     });
-
-    // await DB_Services.createService({
-    //   model: revokeTokenModel,
-    //   data: {
-    //     tokenId: req.decoded.jti,
-    //     userId: req.user._id,
-    //     expireAt: new Date(req.decoded.exp * 1000),
-    //   },
-    // });
   }
 
   req.user.changeCredential = new Date();
@@ -543,7 +542,6 @@ export const logOut = async (req, res, next) => {
   });
 };
 
-// Confirm Email API
 export const confirmEmail = async (req, res, next) => {
   const { email, otp } = req.body;
 
@@ -571,10 +569,6 @@ export const confirmEmail = async (req, res, next) => {
     throw new Error("user not found", { cause: 404 });
   }
 
-  if (user.confirmed) {
-    throw new Error("email already confirmed", { cause: 400 });
-  }
-
   await deleteMethod(OTP_Key({ email }));
 
   res.status(200).json({
@@ -583,7 +577,6 @@ export const confirmEmail = async (req, res, next) => {
   });
 };
 
-// Resend OTP API
 export const resendOTP = async (req, res, next) => {
   const { email } = req.body;
 
@@ -600,58 +593,7 @@ export const resendOTP = async (req, res, next) => {
     throw new Error("user not found", { cause: 404 });
   }
 
-  if (user.confirmed) {
-    throw new Error("email already confirmed", { cause: 400 });
-  }
-
-  const isBlocked = await checkTTLMethod(block_OTP_Key({ email }));
-
-  if (isBlocked > 0) {
-    throw new Error(
-      `you have reached the maximum number of OTP requests and are blocked, please try again after ${isBlocked} seconds`,
-      { cause: 400 },
-    );
-  }
-
-  const ttl = await checkTTLMethod(OTP_Key({ email }));
-
-  if (ttl > 0) {
-    throw new Error(
-      `OTP already sent, please wait ${ttl} seconds before requesting a new one`,
-      { cause: 400 },
-    );
-  }
-
-  const max_otp = await getMethod(max_OTP_Key({ email }));
-
-  if (max_otp >= 3) {
-    await setMethod({
-      key: block_OTP_Key({ email }),
-      value: 1,
-      ttl: 60 * 30,
-    });
-
-    throw new Error(
-      "you have reached the maximum number of OTP requests, please try again later",
-      { cause: 400 },
-    );
-  }
-
-  const OTP = await generateOTP();
-
-  await sendEmail({
-    to: user.email,
-    subject: "Welcome to Saraha App",
-    html: `<h1>Welcome to Saraha App</h1><p>Dear ${user.userName} Your OTP Is : ${OTP} ,</p><p>Thank you for signing up for Saraha App! We're excited to have you on board.</p><p>Best regards,<br>Saraha App Team</p>`,
-  });
-
-  await setMethod({
-    key: OTP_Key({ email }),
-    value: hashing({ plaintext: `${OTP}` }),
-    ttl: 60 * 2,
-  });
-
-  await incrMethod(max_OTP_Key({ email }));
+  await sendEmailOtp({ email, userName: user.userName });
 
   res.status(200).json({
     message: "email confirmed successfully",
@@ -659,7 +601,6 @@ export const resendOTP = async (req, res, next) => {
   });
 };
 
-// Forget Password API
 export const forgetPassword = async (req, res, next) => {
   const { email } = req.body;
 
@@ -704,7 +645,6 @@ export const forgetPassword = async (req, res, next) => {
   });
 };
 
-// Reset Password API
 export const resetPassword = async (req, res, next) => {
   const { email, otp, newPassword, confirmNewPassword } = req.body;
 
@@ -753,7 +693,6 @@ export const resetPassword = async (req, res, next) => {
   });
 };
 
-// Enable Two-Step Verification API
 export const enableTwoStepVerification = async (req, res, next) => {
   const user = req.user;
 
@@ -792,7 +731,6 @@ export const enableTwoStepVerification = async (req, res, next) => {
   });
 };
 
-// Verify Two-Step Verification API
 export const verifyEnableTwoStepVerification = async (req, res, next) => {
   const { otp } = req.body;
   const user = req.user;

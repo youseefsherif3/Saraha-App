@@ -1,4 +1,3 @@
-import { log } from "console";
 import { redisClient } from "./redis.db.js";
 
 export const revokedKey = ({ userId, jti }) => {
@@ -33,6 +32,10 @@ export const two_Step_Login_OTP_Key = ({ email }) => {
   return `two_step_login_otp::${email}`;
 };
 
+export const two_Step_Login_Pending_Key = ({ email }) => {
+  return `two_step_login_pending::${email}`;
+};
+
 export const setMethod = async ({ key, value, ttl } = {}) => {
   try {
     const data = typeof value === "string" ? value : JSON.stringify(value);
@@ -42,19 +45,6 @@ export const setMethod = async ({ key, value, ttl } = {}) => {
       : await redisClient.set(key, data);
   } catch (error) {
     console.error("Error setting value in Redis:", error);
-  }
-};
-
-export const updateMethod = async ({ key, value } = {}) => {
-  try {
-    if (!(await redisClient.exists(key))) {
-      return 0;
-    }
-    const data = typeof value === "string" ? value : JSON.stringify(value);
-
-    return await redisClient.set(key, data);
-  } catch (error) {
-    console.error("Error updating value in Redis:", error);
   }
 };
 
@@ -75,14 +65,6 @@ export const deleteMethod = async (key) => {
     return await redisClient.del(key);
   } catch (error) {
     console.error("Error deleting value from Redis:", error);
-  }
-};
-
-export const existsMethod = async (key) => {
-  try {
-    return await redisClient.exists(key);
-  } catch (error) {
-    console.error("Error checking existence of key in Redis:", error);
   }
 };
 
@@ -123,6 +105,6 @@ export const incrMethod = async (key) => {
   try {
     return await redisClient.incr(key);
   } catch (error) {
-    log("Error incrementing value in Redis:", error);
+    console.error("Error incrementing value in Redis:", error);
   }
 };

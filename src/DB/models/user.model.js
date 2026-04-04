@@ -10,15 +10,15 @@ const userSchema = new mongoose.Schema(
     firstName: {
       type: String,
       required: true,
-      minLenght: 3,
-      maxLenght: 20,
+      minLength: 3,
+      maxLength: 20,
       trim: true,
     },
     lastName: {
       type: String,
       required: true,
-      minLenght: 3,
-      maxLenght: 20,
+      minLength: 3,
+      maxLength: 20,
       trim: true,
     },
     email: {
@@ -31,20 +31,18 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: function () {
-        return this.provider == providerEnum.system ? true : false;
+        return this.provider === providerEnum.system;
       },
-      minLenght: 6,
+      minLength: 6,
       trim: true,
     },
     gender: {
       type: String,
-      // required: true,
       enum: Object.values(genderEnum),
       default: genderEnum.male,
     },
     age: {
       type: Number,
-      // required: true,
     },
     role: {
       type: String,
@@ -61,7 +59,7 @@ const userSchema = new mongoose.Schema(
         public_id: { type: String, required: true },
       },
     ],
-    changeCredential : Date,
+    changeCredential: Date,
     twoStepVerification: {
       type: Boolean,
       default: false,

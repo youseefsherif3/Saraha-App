@@ -2,12 +2,20 @@ export const createService = async ({ model, data } = {}) => {
   return await model.create(data);
 };
 
+export const findService = async ({ model, filter = {}, select = "" } = {}) => {
+  return await model.find(filter).select(select);
+};
+
 export const findOneService = async ({
   model,
   filter = {},
   select = "",
 } = {}) => {
   return await model.findOne(filter).select(select);
+};
+
+export const findByIdService = async ({ model, id, select = "" } = {}) => {
+  return await model.findById(id).select(select);
 };
 
 export const findOneAndUpdateService = async ({

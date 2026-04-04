@@ -2,7 +2,6 @@ import { verifyToken } from "../utils/token.service.js";
 import * as DB_Services from "../../DB/DB.service.js";
 import userModel from "../../DB/models/user.model.js";
 import { TOKEN_SECRET_KEY } from "../../../config/config.service.js";
-import revokeTokenModel from "../../DB/models/revokeToken.model.js";
 import { getMethod, revokedKey } from "../../DB/redis/redis.service.js";
 
 export const authentication = async (req, res, next) => {
@@ -34,7 +33,9 @@ export const authentication = async (req, res, next) => {
     throw new Error("token is expired", { cause: 401 });
   }
 
-  const revokedToken = await getMethod(revokedKey({ userId: decoded.userId, jti: decoded.jti }));
+  const revokedToken = await getMethod(
+    revokedKey({ userId: decoded.userId, jti: decoded.jti }),
+  );
 
   if (revokedToken) {
     throw new Error("token is revoked", { cause: 401 });
