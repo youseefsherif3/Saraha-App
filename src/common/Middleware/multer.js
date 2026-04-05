@@ -1,17 +1,16 @@
 import multer from "multer";
 import fs from "fs";
 import path from "path";
-import os from "os"; // ضفنا المكتبة دي عشان نجيب مسار الـ tmp الخاص بـ Vercel
+import os from "os"; 
 
 export const multer_local = ({
   customPath = "General",
   customType = [],
 } = {}) => {
-  // التعديل هنا: هنستخدم الـ tmp directory بتاع السيرفر
+
   const tmpDir = os.tmpdir();
   const fullPath = path.join(tmpDir, `uploads/${customPath}`);
 
-  // الـ Vercel هيسمح بإنشاء الفولدر هنا عادي جداً
   if (!fs.existsSync(fullPath)) {
     fs.mkdirSync(fullPath, { recursive: true });
   }
@@ -38,7 +37,7 @@ export const multer_local = ({
 };
 
 export const multer_cloudinary = (customType = []) => {
-  // التعديل هنا: برضه هنحفظ الملف مؤقتاً في الـ tmp قبل ما يترفع لـ Cloudinary
+
   const storage = multer.diskStorage({
     destination: (req, file, cb) => {
       cb(null, os.tmpdir());
