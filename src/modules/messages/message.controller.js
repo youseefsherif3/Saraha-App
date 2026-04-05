@@ -14,10 +14,10 @@ const messageRouter = Router({
 
 messageRouter.post(
   "/send",
-  multer_local({
-    customPath: "messages",
-    customType: multerEnum.image,
-  }).array("attachment", 3),
+  // multer_local({
+  //   customPath: "messages",
+  //   customType: multerEnum.image,
+  // }).array("attachment", 3),
   validation(messageValidation.sendMessageSchema),
   messageService.sendMessage,
 );
